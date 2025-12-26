@@ -26,7 +26,7 @@ export const fetchMenuData = async (tenantId: string) => {
     // profiles 테이블에서 tenant_id가 일치하는 정보를 가져옵니다.
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('store_name, logo_url')
+      .select('store_name, logo_url, address, phone, open_hours')
       .eq('tenant_id', tenantId)
       .maybeSingle(); // 데이터가 없어도 에러내지 않고 null 반환
 
@@ -34,6 +34,9 @@ export const fetchMenuData = async (tenantId: string) => {
     const storeInfo: StoreInfo = {
       store_name: profileData?.store_name || 'My Kiosk',
       logo_url: profileData?.logo_url || null,
+      address: profileData?.address || null,         // [NEW]
+      phone: profileData?.phone || null,             // [NEW]
+      open_hours: profileData?.open_hours || null,   // [NEW]
     };
 
     // ---------------------------------------------------------

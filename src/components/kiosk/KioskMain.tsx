@@ -1,37 +1,59 @@
 "use client";
-import React from 'react'; // [수정 1] RefObject 타입을 위해 React import
-import { Category, MenuItem, ModifierGroup } from '@/lib/types';
+import React, { useState } from 'react'; // useState import 추가
+import { Category, MenuItem, ModifierGroup, StoreInfo } from '@/lib/types';
 import { useKioskLogic } from '@/hooks/useKioskLogic';
 
-// 분리한 컴포넌트들 (경로 확인 필수)
 import CategoryTabs from './CategoryTabs';
 import MenuGrid from './MenuGrid';
 import CartSidebar from './CartSidebar';
-import PaymentOverlay from './PaymentOverlay'; // [수정 2] 같은 폴더 내에 있으므로 ./ 로 변경
+import PaymentOverlay from './PaymentOverlay';
 
-
-// 모달들
 import ModifierModal from './modals/ModifierModal';
 import TableNumberModal from './modals/TableNumberModal';
 import OrderTypeModal from './modals/OrderTypeModal';
 import TipModal from './modals/TipModal';
 import DayWarningModal from './modals/DayWarningModal';
+import StoreInfoModal from './modals/StoreInfoModal'; // 모달 import
 
 interface Props {
   categories: Category[];
   items: MenuItem[];
   modifiersObj: { [key: string]: ModifierGroup };
+  storeInfo: StoreInfo; // [수정 1] 타입 정의 확인
 }
 
-export default function KioskMain({ categories, items, modifiersObj }: Props) {
-  // 1. 모든 비즈니스 로직과 상태는 Hook이 담당합니다.
+// [수정 2] 여기서 { ... , storeInfo } 를 꼭 꺼내와야 합니다!
+export default function KioskMain({ categories, items, modifiersObj, storeInfo }: Props) {
   const { state, actions } = useKioskLogic(categories, items);
+  const [showInfo, setShowInfo] = useState(false); // 정보 모달 상태
 
   return (
-    <div className="flex h-full w-full bg-gray-100 relative">
+    <div className="flex h-full w-full bg-gray-100 relative overflow-hidden">
 
-      {/* 2. 왼쪽 영역 (카테고리 + 메뉴 그리드) */}
+      {/* 왼쪽 영역 */}
       <div className="w-[70%] flex flex-col border-r border-gray-300 h-full">
+
+        {/* 헤더 (클릭 시 모달 오픈) */}
+        <div
+          onClick={() => setShowInfo(true)}
+          className="bg-white px-6 py-4 flex items-center gap-4 border-b border-gray-200 shrink-0 cursor-pointer hover:bg-gray-50 transition-colors"
+        >
+          {storeInfo.logo_url ? (
+            <img
+              src={storeInfo.logo_url}
+              alt="Logo"
+              className="w-12 h-12 rounded-full object-cover border border-gray-100 shadow-sm"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl shadow-sm">
+              🏪
+            </div>
+          )}
+          <h1 className="text-2xl font-black text-gray-800 tracking-tight">
+            {storeInfo.store_name}
+          </h1>
+        </div>
+
         <CategoryTabs
           categories={categories}
           activeTab={state.activeTab}
@@ -43,24 +65,30 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
         />
       </div>
 
-      {/* 3. 오른쪽 영역 (장바구니 사이드바) */}
+      {/* 오른쪽 장바구니 */}
       <CartSidebar
         cart={state.cart}
         totals={state.totals}
         onRemove={actions.removeFromCart}
         onClear={actions.clearCart}
         onPayClick={() => actions.setModals(prev => ({ ...prev, table: true }))}
-        // [수정 3] 타입 단언(as)을 사용하여 확실하게 매칭시킵니다.
-        // useKioskLogic은 RefObject<HTMLDivElement>를 반환하고
-        // CartSidebar는 RefObject<HTMLDivElement>를 받습니다.
         cartEndRef={state.cartEndRef as React.RefObject<HTMLDivElement>}
       />
 
-      {/* 4. 각종 모달들 (상태에 따라 조건부 렌더링) */}
+      {/* --- 모달들 --- */}
+
+      {/* [수정 3] 이제 storeInfo가 존재하므로 빨간 줄이 사라집니다 */}
+      {showInfo && (
+        <StoreInfoModal
+          info={storeInfo}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
+
       {state.selectedItem && (
         <ModifierModal
           item={state.selectedItem}
-          modifiersObj={modifiersObj} // (새 로직에서는 안 쓰이지만 호환성 위해 유지)
+          modifiersObj={modifiersObj}
           onClose={() => actions.setSelectedItem(null)}
           onConfirm={actions.addToCart}
         />
@@ -103,7 +131,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
         />
       )}
 
-      {/* 5. 결제 상태 오버레이 (로딩/성공 화면) */}
       <PaymentOverlay status={state.paymentStatus} />
     </div>
   );

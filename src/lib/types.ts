@@ -111,3 +111,12 @@ export interface UserProfile {
     role: UserRole;
     tenant_id: string | null;
 }
+
+// [수정] 가게 정보 타입 확장
+export interface StoreInfo {
+    store_name: string;
+    logo_url: string | null;
+    address?: string | null;      // [NEW]
+    phone?: string | null;        // [NEW]
+    open_hours?: string | null;   // [NEW]
+}

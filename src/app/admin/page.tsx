@@ -186,6 +186,11 @@ export default async function StoreAdminDashboard() {
                             <span>Edit Modifiers</span>
                             <span>→</span>
                         </Link>
+                        {/* [NEW] 설정 페이지 이동 버튼 추가 */}
+                        <Link href="/admin/settings" className="px-4 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-700 font-bold transition-colors text-sm flex justify-between mt-2">
+                            <span>⚙️ Store Settings</span>
+                            <span>→</span>
+                        </Link>
                     </div>
                 </div>
             </div>

@@ -2,32 +2,39 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
 import KioskMain from '@/components/kiosk/KioskMain';
-import { Category, MenuItem, ModifierGroup } from '@/lib/types';
-
-// Supabase 클라이언트 생성
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { Category, MenuItem, ModifierGroup, StoreInfo } from '@/lib/types';
+// [중요] 우리가 만든 강력한 데이터 패처 함수 import
+import { fetchMenuData } from '@/lib/dataFetcher';
 
 function KioskDataFetcher() {
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // KioskMain에 넘겨줄 데이터 상태
+    // KioskMain에 넘겨줄 데이터 상태들
     const [categories, setCategories] = useState<Category[]>([]);
     const [items, setItems] = useState<MenuItem[]>([]);
     const [modifiersObj, setModifiersObj] = useState<{ [key: string]: ModifierGroup }>({});
 
+    // [NEW] 가게 정보 상태 추가 (초기값 설정)
+    const [storeInfo, setStoreInfo] = useState<StoreInfo>({
+        store_name: '',
+        logo_url: null,
+        address: null,
+        phone: null,
+        open_hours: null
+    });
+
     useEffect(() => {
         // 1. URL 파라미터나 로컬 스토리지에서 Tenant ID 확인
         let tid = searchParams.get('tid');
+
         if (tid) {
+            // URL에 있으면 로컬스토리지 갱신
             localStorage.setItem('kiosk_tenant_id', tid);
         } else {
+            // URL에 없으면 로컬스토리지에서 가져오기
             tid = localStorage.getItem('kiosk_tenant_id');
         }
 
@@ -37,100 +44,40 @@ function KioskDataFetcher() {
             return;
         }
 
-        // 2. 데이터 가져오기 시작
-        fetchData(tid);
+        // 2. 데이터 가져오기 실행
+        loadAllData(tid);
     }, [searchParams]);
 
-    const fetchData = async (tid: string) => {
-        try {
-            setLoading(true);
+    const loadAllData = async (tid: string) => {
+        setLoading(true);
 
-            // (1) 카테고리 가져오기
-            const { data: catsData, error: catError } = await supabase
-                .from('categories')
-                .select('*')
-                .eq('tenant_id', tid)
-                .order('sort_order');
+        // [핵심] lib/dataFetcher.ts에서 만든 함수 하나로 모든 데이터를 다 가져옵니다.
+        const data = await fetchMenuData(tid);
 
-            if (catError) throw catError;
-
-            // (2) 메뉴 아이템 & 옵션 그룹 & 옵션 상세 정보 가져오기 (Deep Query)
-            // items -> item_modifier_groups -> modifier_groups -> modifiers 구조
-            const { data: itemsData, error: itemError } = await supabase
-                .from('items')
-                .select(`
-          *,
-          item_modifier_groups (
-            modifier_groups (
-              id, name, min_selection, max_selection, is_required,
-              modifiers ( id, name, price )
-            )
-          )
-        `)
-                .eq('tenant_id', tid)
-                .eq('is_sold_out', false) // (선택) 품절 안 된 것만 가져오려면 추가
-                .order('sort_order');
-
-            if (itemError) throw itemError;
-
-            // (3) 데이터 가공 (Supabase 응답 -> 프론트엔드 타입 변환)
-            // modifiersObj를 만들기 위한 임시 저장소
-            const tempModifiersObj: { [key: string]: ModifierGroup } = {};
-
-            const formattedItems: MenuItem[] = (itemsData || []).map((item: any) => {
-                // 아이템에 연결된 옵션 그룹들을 추출
-                const groups: ModifierGroup[] = item.item_modifier_groups?.map((img: any) => {
-                    const groupData = img.modifier_groups;
-
-                    // 옵션들을 가격순 정렬
-                    const sortedModifiers = (groupData.modifiers || []).sort((a: any, b: any) => a.price - b.price);
-
-                    const formattedGroup: ModifierGroup = {
-                        id: groupData.id,
-                        name: groupData.name,
-                        min_selection: groupData.min_selection,
-                        max_selection: groupData.max_selection,
-                        is_required: groupData.is_required,
-                        modifiers: sortedModifiers,
-                        // 호환성 유지용
-                        options: sortedModifiers
-                    };
-
-                    // modifiersObj에 그룹 이름(또는 ID)을 키로 저장
-                    // (ModifierModal에서 이름으로 찾거나 ID로 찾을 때 사용)
-                    tempModifiersObj[groupData.name] = formattedGroup; // 이름 키
-                    tempModifiersObj[groupData.id] = formattedGroup;   // ID 키 (권장)
-
-                    return formattedGroup;
-                }) || [];
-
-                return {
-                    ...item,
-                    modifier_groups: groups,
-                    // 호환성 유지용
-                    modifierGroups: groups.map(g => g.name) // 이름 배열
-                };
-            });
-
-            setCategories(catsData || []);
-            setItems(formattedItems);
-            setModifiersObj(tempModifiersObj);
-
-        } catch (err: any) {
-            console.error("Data Fetch Error:", err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
+        if (data.categories.length === 0 && data.items.length === 0) {
+            // 데이터가 아예 없으면 에러로 간주할 수도 있고, 그냥 빈 가게일 수도 있음.
+            // 여기서는 스토어 이름이라도 가져왔으면 성공으로 간주
+            if (data.storeInfo.store_name === 'System Error') {
+                setError("Failed to load store data.");
+            }
         }
+
+        // 상태 업데이트
+        setCategories(data.categories);
+        setItems(data.items);
+        setModifiersObj(data.modifiersObj);
+        setStoreInfo(data.storeInfo); // [해결] 여기서 storeInfo를 채워줍니다.
+
+        setLoading(false);
     };
 
-    // --- 렌더링 ---
+    // --- 화면 렌더링 ---
 
     if (loading) {
         return (
             <div className="flex h-screen items-center justify-center bg-gray-100 flex-col gap-4">
                 <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                <p className="text-gray-500 font-bold text-lg">Loading Menu...</p>
+                <p className="text-gray-500 font-bold text-lg">Loading Store...</p>
             </div>
         );
     }
@@ -157,6 +104,7 @@ function KioskDataFetcher() {
             categories={categories}
             items={items}
             modifiersObj={modifiersObj}
+            storeInfo={storeInfo} // [완료] 이제 에러가 사라집니다.
         />
     );
 }
