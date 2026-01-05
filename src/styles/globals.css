@@ -22,9 +22,11 @@
   }
 }
 
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  @apply bg-white; /* 혹은 bg-gray-100 */
+  background-color: white; /* 확실하게 흰색 지정 */
+  overscroll-behavior: none; /* 스크롤 끝에서 튕길 때 배경색 노출 방지 (선택 사항) */
   font-family: Arial, Helvetica, sans-serif;
 }
 

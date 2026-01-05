@@ -100,11 +100,12 @@ export default function AdminMenuPage() {
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order || 0)) : 0;
 
     const { error } = await supabase.from('items').insert({
-      tenant_id: tenantId, // [수정] restaurant_id 대신 tenant_id 사용
+      tenant_id: tenantId,
       category_id: selectedCatId,
       name: name,
+      description: '', // [수정] 새 아이템 추가 시 설명 필드 초기화
       price: 0,
-      is_sold_out: false, // is_available -> is_sold_out (DB 컬럼명 맞춤)
+      is_sold_out: false,
       sort_order: maxOrder + 1
     });
 
@@ -124,6 +125,7 @@ export default function AdminMenuPage() {
       .from('items')
       .update({
         name: editForm.name,
+        description: editForm.description, // [수정] 설명 필드 업데이트 추가
         price: Number(editForm.price) || 0,
         is_sold_out: editForm.is_sold_out,
         category_id: editForm.category_id
@@ -155,7 +157,7 @@ export default function AdminMenuPage() {
 
     // 1. 업로드
     const { error: uploadError } = await supabase.storage
-      .from('menu-images') // [주의] Supabase Storage에 'menu-images' 버킷을 만들어야 함
+      .from('menu-images') 
       .upload(filePath, file);
 
     if (uploadError) return alert("Upload Failed: " + uploadError.message);
@@ -293,8 +295,8 @@ export default function AdminMenuPage() {
                     </div>
                   )}
 
-                  {/* 이미지 영역 */}
-                  <div className="aspect-video bg-slate-100 rounded-2xl relative overflow-hidden group mb-5 flex items-center justify-center border border-slate-100">
+                  {/* 이미지 영역: [수정] aspect-video -> aspect-square (1:1 비율) */}
+                  <div className="aspect-square bg-slate-100 rounded-2xl relative overflow-hidden group mb-5 flex items-center justify-center border border-slate-100">
                     {displayData.image_url ? (
                       <img
                         src={displayData.image_url}
@@ -348,6 +350,20 @@ export default function AdminMenuPage() {
                         onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         className={`w-full text-lg font-black bg-transparent outline-none border-b-2 py-1 transition-colors
                           ${isEditing ? 'border-blue-500 text-slate-900' : 'border-transparent text-slate-800'}`}
+                      />
+                    </div>
+
+                    {/* [수정] Description 필드 추가 */}
+                    <div>
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wider pl-1">Description</label>
+                      <textarea
+                        disabled={!isEditing}
+                        value={displayData.description || ''}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        className={`w-full text-sm font-medium bg-transparent outline-none border-b-2 py-1 transition-colors resize-none
+                          ${isEditing ? 'border-blue-500 text-slate-600' : 'border-transparent text-slate-500'}`}
+                        rows={2}
+                        placeholder={isEditing ? "Add a short description..." : ""}
                       />
                     </div>
 
